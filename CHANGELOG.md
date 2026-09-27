@@ -1,5 +1,23 @@
 # 更新日志 / Changelog
 
+## 0.4.2 — 2026-09-27
+
+> **English summary**: macOS only — the drag "air wall" is gone. AppKit constrains windows to the
+> screen by default (so a title bar cannot go above the menu bar); for a borderless pet window that
+> clamped the window's top at the visible frame's top. Overriding `constrainFrameRect` makes her
+> draggable anywhere, including partially off-screen.
+
+### 修：拖到屏幕中上部就撞上一堵「空气墙」（macOS）
+
+拖动日志是铁证 —— 连拖 5 次，窗口 y 每次都停在 **150**：
+`150 + 900（窗口高）= 1050` = 屏幕可用区顶边，一个像素都不差。
+
+原因不在我们的逻辑，而在 AppKit 的默认行为：`NSWindow.constrainFrameRect(_:to:)`
+会把窗口约束在屏幕内（防止标题栏顶到菜单栏上方）。桌宠是无边框窗口、本来就该能拖到任意位置，
+所以覆写它、原样返回 frame 即可。
+
+现在她可以拖到屏幕任何地方，包括拖到菜单栏那一片、甚至半出屏。
+
 ## 0.4.1 — 2026-09-27
 
 > **English summary**: UI colour unified to the whale blue used by the site and the app icon (CSS
