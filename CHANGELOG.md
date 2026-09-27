@@ -1,5 +1,22 @@
 # 更新日志 / Changelog
 
+## 0.4.1 — 2026-09-27
+
+> **English summary**: UI colour unified to the whale blue used by the site and the app icon (CSS
+> variables only, no layout changes); the desktop shell now decides drag ownership at the moment the
+> drag starts (previously a 90 ms-stale hit-test could hand the drag to the page, which can only move
+> her inside the window — that felt like an invisible boundary); and the panel-clipping experiments
+> were reverted back to the known-good placement code.
+
+### 修 / 改
+
+- **配色统一成鲸鱼蓝**（`#3b62f6`，与官网、App 图标同一套）；只动颜色变量，没碰任何布局代码
+- **桌面版拖动不再有"隐形边界"**：拖动的归属改成在**拖动开始那一刻**判定 ——
+  之前如果鼠标按下时探针的上一次结果恰好是「面板」，这次拖动就会被交给网页，
+  而网页只能在她自己的窗口范围内挪动，于是撞到窗口的边（看着像"拖不出这块区域"）
+- **回退面板相关的试验改动**：退回 08098af 的定位代码（主人认可的「只是稍微被截」那版），
+  真浏览器自检 99/0
+
 ## 0.4.0 — 2026-09-26
 
 > **English summary / 英文摘要**

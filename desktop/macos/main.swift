@@ -235,11 +235,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     func handle(_ e: NSEvent) -> NSEvent? {
         switch e.type {
         case .leftMouseDown:
+            // 按下瞬间立刻重新判一次「鼠标下面是她还是面板」——
+            // 否则会用 90ms 前的旧结果：鼠标刚扫过菜单就会判成「面板」，
+            // 于是这次拖动被交给网页，只能在窗口范围内挪 → 主人感觉「有边界拖不动」。
+            overPanel = false
+            updateHit()
             downAt = NSEvent.mouseLocation
             winAt = win.frame.origin
             moved = 0
             shellDrag = false
-            panelGesture = overPanel
+            panelGesture = false
             // 点她 = 想跟她说话：把 App 激活、窗口变 key、焦点交给网页，
             // 否则无边框窗口收不到键盘事件（「能点但打不了字」就是这么来的）
             NSApp.activate(ignoringOtherApps: true)
@@ -254,7 +259,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         case .leftMouseDragged:
             // 在面板里按下 → 这是网页自己的拖动（拖滑块、选文字），一律放行。
             // 之前不分青红皂白把拖动都当「拖窗口」吃掉，结果设置里的滑块拖不动。
-            if panelGesture { return e }
+            // 拖动已经超过阈值：用「此刻」的判断决定归属。
+            // 只在鼠标下面是真控件（滑块/按钮/输入框）时才留给网页，
+            // 其余情况一律拖窗口 —— 这样整个屏幕都能拖。
+            if overPanel { return e }
             let m = NSEvent.mouseLocation
             let dx = m.x - downAt.x, dy = m.y - downAt.y
             moved = max(moved, abs(dx) + abs(dy))
