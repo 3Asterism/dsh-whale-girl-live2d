@@ -39,6 +39,16 @@ let assetsPath: String = {
 final class PetWindow: NSWindow {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
+
+    /// 拆掉 macOS 的「空气墙」。
+    ///
+    /// AppKit 默认会把窗口约束在屏幕内（不让顶部顶到菜单栏上面），对普通窗口是对的，
+    /// 但桌宠是无边框、本来就该能拖到任何地方（包括半出屏）的窗口。
+    /// 日志证据：拖动时窗口 y 每次都停在 150 —— 150 + 900(窗口高) = 1050 = 屏幕可用区顶边，
+    /// 就是这条默认约束在拦。覆写成原样返回即可。
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
+        return frameRect
+    }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScriptMessageHandler {
@@ -83,6 +93,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
            let size = attrs[.size] as? Int, size > 2_000_000 {
             try? FileManager.default.removeItem(atPath: logPath)
         }
+        // 构建指纹：确认「正在跑的」就是「刚编译的」（排查过好几次「改了没生效」）
+        let exe = Bundle.main.executablePath ?? "?"
+        let mt = (try? FileManager.default.attributesOfItem(atPath: exe)[.modificationDate] as? Date) ?? nil
+        log("=== 启动 构建时间 \(mt.map { ISO8601DateFormatter().string(from: $0) } ?? "?") ===")
         beginAwake()
         makeWindow()
         makeWeb()
@@ -240,6 +254,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             // 于是这次拖动被交给网页，只能在窗口范围内挪 → 主人感觉「有边界拖不动」。
             overPanel = false
             updateHit()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
+                guard let self else { return }
+                self.log("按下判定: overPanel=\(self.overPanel) 鼠标=(\(Int(self.downAt.x)),\(Int(self.downAt.y)))")
+            }
             downAt = NSEvent.mouseLocation
             winAt = win.frame.origin
             moved = 0
@@ -269,6 +287,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             if moved > 3 {
                 if !shellDrag {
                     shellDrag = true
+                    log("开始拖窗口: overPanel=\(overPanel) 起点=(\(Int(downAt.x)),\(Int(downAt.y)))")
                     // 告诉她「这次不算点我」：前端监听 pointercancel 会把按下状态清掉
                     web.evaluateJavaScript(
                         "document.dispatchEvent(new PointerEvent('pointercancel',{bubbles:true}))",
@@ -283,6 +302,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         case .leftMouseUp:
             panelGesture = false
             if shellDrag {
+                log("拖动结束: 窗口移到 (\(Int(win.frame.minX)),\(Int(win.frame.minY)))")
                 shellDrag = false
                 NSCursor.pop()
                 savePosition()
