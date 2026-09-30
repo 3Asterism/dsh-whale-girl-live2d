@@ -2660,6 +2660,12 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     let start = null
     let leaveTimer = null
     const drag = { vx: 0, vy: 0 }
+    /**
+     * 拖动这一路上用的留白缓存：按下的时候现测一次就够了（拖动中她的轮廓不会变），
+     * 没必要跟 visualMargins() 一样每次都强制重测——那是给松手那一刻的精确判断用的，
+     * 真拖起来（pointermove 高频触发）每帧都测一次画布就太贵了。
+     */
+    let dragMargins = { left: 0, right: 0, top: 0, bottom: 0 }
 
     document.addEventListener(
       'pointermove',
@@ -2686,10 +2692,17 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
           const dy = e.clientY - start.my
           if (!dragMoved && Math.abs(dx) + Math.abs(dy) > 4) dragMoved = true
           if (dragMoved) {
-            const nh = root.getBoundingClientRect().height
-            const nx = clamp(start.left + dx, -40, window.innerWidth - 60)
-            // 竖直方向随便放，但别放到连底下三个按钮都被屏幕切掉
-            const ny = clampY(start.top + dy, nh, window.innerHeight)
+            const nRect = root.getBoundingClientRect()
+            const nh = nRect.height
+            const nw = nRect.width
+            // 原来是写死的 -40/-60 容差——现在贴角落要求看得见的边能拖到真正
+            // 贴墙，写死的小容差不够用（透明留白一大，包围盒还没到边就被卡住了，
+            // 松手时永远进不了 SNAP_DIST）。改成按这次抓起来时量到的留白放宽：
+            // 包围盒可以拖到「留白刚好出屏幕、看得见的部分刚好贴墙」那个位置。
+            const nx = clamp(start.left + dx, -dragMargins.left - 20, window.innerWidth - nw + dragMargins.right + 20)
+            // 竖直方向同理放宽；不贴角落的话，松手交给 snapOnRelease/dragInertia
+            // 各自的规矩去收（dragInertia 仍然会退回给工具条留白的安全范围）。
+            const ny = clamp(start.top + dy, -dragMargins.top - 20, window.innerHeight - nh + dragMargins.bottom + 20)
             // 身体随拖动方向摇摆：横向速度直接喂给身体的倾斜
             drag.vx = nx - (parseFloat(root.style.left) || nx)
             drag.vy = ny - (parseFloat(root.style.top) || ny)
@@ -2721,6 +2734,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         dragMoved = false
         delete root.dataset.edge // 一拖就离开墙，别再显示「贴着左边」
         delete root.dataset.corner // 同上：一拖就离开角落，工具条先挪回下面，吸没吸得上松手再说
+        dragMargins = visualMargins()
         const r = root.getBoundingClientRect()
         start = { mx: e.clientX, my: e.clientY, left: r.left, top: r.top }
       },
