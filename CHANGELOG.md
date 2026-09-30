@@ -24,6 +24,12 @@
 
 （还加了「探针统计」日志，每 60 秒一行，以后再卡可以直接看数字定位。）
 
+补充（同一天）：窗口从 560×900 缩到 **460×700** —— 面板最大 471 高、聊天框 370 宽，
+加上她约 200px，留足余量即可。实测（程序模拟鼠标连续移动 6 秒量 WindowServer）：
+桌宠在跑 66.4% → 关掉桌宠 78.8%（说明卡顿的主因不在本应用，见 README 排错）；
+缩窗后同场景 58.3%。
+
+
 ## 0.4.3 — 2026-09-30
 
 > **English summary**: the macOS shell no longer hard-codes the DSH port. It discovers the host at

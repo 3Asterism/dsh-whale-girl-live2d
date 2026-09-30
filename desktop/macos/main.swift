@@ -23,10 +23,12 @@ var petURL: String { deskBase + "/dsh-pet/standalone" }
 // 窗口必须比「她 + 四周面板」大：说话框 370 宽、设置面板 393×471，
 // 窗口太小时面板会被窗口本身裁掉（主人看到的「只剩一个角」就是这个原因）。
 // 多出来的区域是透明的、而且点击穿透 —— 不影响你操作别的窗口。
-let WIN_W: CGFloat = 560
-// 只把高度加高（方向是「往上长」）：她仍然待在窗口右下角，
-// 但头顶多出 800+px，聊天框才能完整显示出来。
-let WIN_H: CGFloat = 900
+// 窗口只留「够用」的大小：菜单面板 393×471、聊天框 370 宽，
+// 加上她本人大约 200px 高，再留点余量 → 460×700 足够。
+// 实测：透明窗口的面积越小，WindowServer 合成它就越省
+//（鼠标连续移动时 WindowServer 66~79%，透明面积是它的直接成本）。
+let WIN_W: CGFloat = 460
+let WIN_H: CGFloat = 700
 let K_X = "pet.win.x", K_Y = "pet.win.y", K_TOP = "pet.win.top", K_LOW = "perf.low"
 
 /// 插件资源目录：优先用「装进 profile 的那份」，找不到再按 App 包相对位置找，
