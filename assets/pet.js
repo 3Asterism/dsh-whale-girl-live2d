@@ -642,9 +642,17 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 .dshp-root.dshp-hover .dshp-dock,.dshp-root.dshp-open .dshp-dock{opacity:1}
 /* 贴进真正的角落时，正下方没有余量留给工具条了（不然角落就白贴了），
    所以挪到侧边，竖排、贴着她身子。哪一侧空出来给按钮，看贴的是哪个角：
-   贴左边的角（没有左边空间）就把按钮甩到右边，贴右边的角反过来。 */
-.dshp-root[data-corner] .dshp-dock{left:auto;right:auto;bottom:auto;top:50%;
-  transform:translateY(-50%);flex-direction:column;width:auto;white-space:normal}
+   贴左边的角（没有左边空间）就把按钮甩到右边，贴右边的角反过来。
+   竖直方向**不**用「以整个包围盒居中」——包围盒比看得见的她大一圈，
+   居中会让工具条的中心比她实际的中心更靠上，贴顶角落时很容易被顶到
+   窗口标题栏那条线以上去。改成贴对应的那条边（跟角落同侧）：贴顶的角
+   工具条也贴顶，贴底的角工具条也贴底，跟着她一起「贴死」，不会比她更冒。 */
+.dshp-root[data-corner] .dshp-dock{left:auto;right:auto;
+  flex-direction:column;width:auto;white-space:normal;transform:none}
+.dshp-root[data-corner="tl"] .dshp-dock,.dshp-root[data-corner="tr"] .dshp-dock{
+  top:calc(10px * var(--dshp-ds));bottom:auto}
+.dshp-root[data-corner="bl"] .dshp-dock,.dshp-root[data-corner="br"] .dshp-dock{
+  bottom:calc(10px * var(--dshp-ds));top:auto}
 .dshp-root[data-corner="tl"] .dshp-dock,.dshp-root[data-corner="bl"] .dshp-dock{
   left:calc(100% + 6px * var(--dshp-ds))}
 .dshp-root[data-corner="tr"] .dshp-dock,.dshp-root[data-corner="br"] .dshp-dock{
@@ -1870,8 +1878,15 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    * 用命中掩码（mask.bbox，跟点击穿透用的是同一份数据）把留白换算成当前
    * 屏幕像素，贴边计算时统一扣掉。掩码还没测出来就退回 0（等价于老行为，
    * 不会比原来更差）。
+   *
+   * 强制重测一次（忽略节流）：mask.bbox 平时只在 resize/换姿势时才刷新，
+   * 待机动作（自拍、伸展…）会临时改变轮廓但不会标脏——松手贴边这一刻如果
+   * 用的是几秒前、她做着别的动作时测出来的旧掩码，留白算出来就会偏，
+   * 贴边表现看着就跟撞了大运一样时准时不准。这里直接现测一次当前这一帧，
+   * 保证用的是「她此刻真实的样子」。
    */
   function visualMargins() {
+    buildMask(true)
     const b = mask.bbox
     if (!b) return { left: 0, right: 0, top: 0, bottom: 0 }
     const r = ui.root.getBoundingClientRect()
@@ -2090,9 +2105,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     return out
   }
 
-  function buildMask() {
+  function buildMask(force) {
     if (!app || !model || mask.building) return
-    if (performance.now() - mask.lastBuild < 300) return
+    if (!force && performance.now() - mask.lastBuild < 300) return
     mask.building = true
     try {
       const src = app.view
