@@ -3345,12 +3345,13 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     }
     h.today.textContent = d.todayUsage === undefined || d.todayUsage === null ? '—' : money(d.todayUsage, d.todayUsageCurrency || d.currency)
 
-    // 本轮消耗：金额 + tokens
+    // 本轮消耗：金额 + tokens（token 数字算流水账，安静模式下不显示，钱照常显示）
     const t = hud.turn || {}
     if (t.amount === undefined || t.amount === null) {
       h.turn.textContent = '—'
     } else {
-      h.turn.textContent = money(t.amount, d.currency) + (t.tokens ? ' · ' + Number(t.tokens).toLocaleString() + ' tokens' : '')
+      h.turn.textContent =
+        money(t.amount, d.currency) + (CFG.repeatChat && t.tokens ? ' · ' + Number(t.tokens).toLocaleString() + ' tokens' : '')
     }
 
     // 倒计时：宿主给的切换时刻是权威（含周末/法定节假日规则）
