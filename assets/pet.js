@@ -42,12 +42,18 @@
       sleepAfterMs: 180000,
       bubbleTtlMs: 0,
       maxWidthRatio: 0.5,
+      repeatChat: false, // 默认不复述：气泡不显示「你问了什么/她回了什么」的原文，其余台词、动作、表情照常
     },
     BOOT.config || {},
   )
 
   const BASE = '/dsh-pet'
   const LS_KEY = 'dsh-live2d-pet:layout'
+  // 本地记住的开关优先于宿主 boot config——设置是「这台机器上这个人」的偏好，不该每次重启都被还原
+  {
+    const savedRepeat = readLayout().repeatChat
+    if (savedRepeat != null) CFG.repeatChat = !!savedRepeat
+  }
   const MOTION_PRIORITY = { NONE: 0, IDLE: 1, NORMAL: 2, FORCE: 3 }
   /**
    * 取景模式。这个模型是一整张「书桌场景」而不是半身立绘，直接整体显示会又小又占地方。
@@ -3707,7 +3713,14 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       CFG.talkMouth = !CFG.talkMouth
       mouthBtn.textContent = CFG.talkMouth ? '说话口型：开' : '说话口型：关'
     })
-    row1.append(eyeBtn, mouthBtn)
+    const chatBtn = $('button', 'dshp-btn', CFG.repeatChat ? '复述对话原文：开' : '复述对话原文：关')
+    chatBtn.title = '只管气泡要不要照抄「你问了什么 / 她回了什么」的原文；台词、动作、表情不受影响'
+    chatBtn.addEventListener('click', () => {
+      CFG.repeatChat = !CFG.repeatChat
+      chatBtn.textContent = CFG.repeatChat ? '复述对话原文：开' : '复述对话原文：关'
+      saveLayout({ repeatChat: CFG.repeatChat })
+    })
+    row1.append(eyeBtn, mouthBtn, chatBtn)
 
     const row0 = $('div', 'dshp-row')
     const resetAll = $('button', 'dshp-btn dshp-primary', '一键重置所有状态')
@@ -3818,6 +3831,15 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     agent.sleeping = false
   }
 
+  /* 「复述对话」开关只管这一件事：气泡里要不要出现「你问了什么原文 / 她回了什么原文」。
+   * 台词、思考提示、工具动态、出错文案、表情动作全部不受这个开关影响——见下面
+   * handleEvent 里只有 'user'（你的原话）和 'delta'/'assistant'（她的回复原文）
+   * 三处经过这道门，其余调用都还是直接 ui.bubble.show/note/act。 */
+  function sayChat(text, opts) {
+    if (!CFG.repeatChat) return
+    ui.bubble.show(text, opts)
+  }
+
   function handleEvent(m) {
     switch (m.t) {
       case 'hello':
@@ -3831,7 +3853,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         stopActing()
         setBase('listening', IDLE_PROPS)
         clearToolProp()
-        ui.bubble.show(String(m.text || '').slice(0, 300), { name: '你', ttl: 3500 })
+        sayChat(String(m.text || '').slice(0, 300), { name: '你', ttl: 3500 })
         break
 
       case 'turn-start':
@@ -3866,9 +3888,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
           setStatus('speaking')
           rig.talking = true
           setBase('happy', WORK_PROPS)
-          ui.bubble.show('', { name: 'DS 鲸鱼娘', stream: true, sticky: true })
+          sayChat('', { name: 'DS 鲸鱼娘', stream: true, sticky: true })
         }
-        ui.bubble.show(m.text || '', { stream: true, sticky: true })
+        sayChat(m.text || '', { stream: true, sticky: true })
         break
 
       case 'assistant':
@@ -3878,7 +3900,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         if (m.text) {
           setStatus('speaking')
           agent.lastText = m.text.slice(0, 4000)
-          ui.bubble.show(agent.lastText, { name: 'DS 鲸鱼娘', sticky: true })
+          sayChat(agent.lastText, { name: 'DS 鲸鱼娘', sticky: true })
         }
         if (m.usage) {
           const t = (m.usage.input || 0) + (m.usage.cache || 0) + (m.usage.output || 0)
