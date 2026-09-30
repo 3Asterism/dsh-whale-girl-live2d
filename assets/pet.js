@@ -1977,7 +1977,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     // 记成「贴哪一边 + 竖直位置」，窗口大小变了也还贴着那一边、高低不动
     saveLayout({ x: null, y: null, corner: null, edge, edgeY: Math.round(y) })
     ui.root.dataset.edge = edge
-    ui.root.dataset.corner = ''
+    delete ui.root.dataset.corner
     return true
   }
 
@@ -1998,7 +1998,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     root.style.top = Math.round(yy) + 'px'
     root.style.bottom = 'auto'
     root.dataset.edge = edge
-    root.dataset.corner = ''
+    delete root.dataset.corner
     markStageRectDirty()
   }
 
@@ -2045,8 +2045,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       root.style.top = clampY(layout.y, h, vh) + 'px'
       root.style.right = 'auto'
       root.style.bottom = 'auto'
-      root.dataset.edge = ''
-      root.dataset.corner = ''
+      delete root.dataset.edge
+      delete root.dataset.corner
       markStageRectDirty()
       return
     }
