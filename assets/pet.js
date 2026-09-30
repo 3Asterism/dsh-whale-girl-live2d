@@ -1860,6 +1860,29 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   /** 松手时离边多近就吸附 */
   const SNAP_DIST = 52
 
+  /**
+   * `ui.root` 的包围盒比看得见的她大一圈——fitModel 特意留了 PAD（见那边注释：
+   * 尾巴、举起来的道具、惊讶表情容易被裁），所以四边都带着一圈透明留白。
+   * 贴边/贴角贴的应该是「看得见的她」，不是这圈留白，不然算出来的「贴死」
+   * 位置其实还差一截（看着像怎么都拖不进角落），贴顶边的时候又会反过来把
+   * 留白也顶到墙外，看着像穿模。
+   *
+   * 用命中掩码（mask.bbox，跟点击穿透用的是同一份数据）把留白换算成当前
+   * 屏幕像素，贴边计算时统一扣掉。掩码还没测出来就退回 0（等价于老行为，
+   * 不会比原来更差）。
+   */
+  function visualMargins() {
+    const b = mask.bbox
+    if (!b) return { left: 0, right: 0, top: 0, bottom: 0 }
+    const r = ui.root.getBoundingClientRect()
+    return {
+      left: b.x0 * r.width,
+      right: (1 - b.x1) * r.width,
+      top: b.y0 * r.height,
+      bottom: (1 - b.y1) * r.height,
+    }
+  }
+
   /** 工具条在容器下面探出来的高度（贴底时要把这段算进去，否则按钮会被屏幕切掉） */
   function dockClearance() {
     const s = parseFloat((ui.root.style.getPropertyValue('--dshp-s') || '1').trim()) || 1
@@ -1904,15 +1927,17 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const vw = window.innerWidth
     const vh = window.innerHeight
     const r = ui.root.getBoundingClientRect()
-    const nearL = r.left < SNAP_DIST
-    const nearR = vw - r.right < SNAP_DIST
-    const nearT = r.top < SNAP_DIST
-    const nearB = vh - r.bottom < SNAP_DIST
+    const m = visualMargins()
+    // 判「够不够近」和算「贴死的位置」都要用看得见的边，不是包围盒的边
+    const nearL = r.left + m.left < SNAP_DIST
+    const nearR = vw - (r.right - m.right) < SNAP_DIST
+    const nearT = r.top + m.top < SNAP_DIST
+    const nearB = vh - (r.bottom - m.bottom) < SNAP_DIST
 
     if ((nearL || nearR) && (nearT || nearB)) {
       const corner = (nearT ? 't' : 'b') + (nearL ? 'l' : 'r')
-      const left = nearL ? EDGE_GAP : vw - r.width - EDGE_GAP
-      const top = nearT ? EDGE_GAP : vh - r.height - EDGE_GAP
+      const left = nearL ? EDGE_GAP - m.left : vw - r.width - EDGE_GAP + m.right
+      const top = nearT ? EDGE_GAP - m.top : vh - r.height - EDGE_GAP + m.bottom
       glideTo(left, top)
       // 记成「贴哪个角」，窗口大小变了也还贴着那个角（见 resize 里的 applyPosition）
       saveLayout({ x: null, y: null, edge: null, edgeY: null, corner })
@@ -1924,7 +1949,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
     const edge = nearR ? 'right' : 'left'
     const y = clampY(r.top, r.height, vh)
-    const left = edge === 'left' ? EDGE_GAP : vw - r.width - EDGE_GAP
+    const left = edge === 'left' ? EDGE_GAP - m.left : vw - r.width - EDGE_GAP + m.right
     glideTo(left, y)
     // 记成「贴哪一边 + 竖直位置」，窗口大小变了也还贴着那一边、高低不动
     saveLayout({ x: null, y: null, corner: null, edge, edgeY: Math.round(y) })
@@ -1943,9 +1968,10 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   /** 贴住某一侧墙：left/right + top 固定，竖直位置由主人自己定 */
   function applyEdge(edge, y) {
     const root = ui.root
+    const m = visualMargins()
     const yy = clampY(Number(y) || 0, root.getBoundingClientRect().height || 0, window.innerHeight)
-    root.style.left = edge === 'left' ? EDGE_GAP + 'px' : 'auto'
-    root.style.right = edge === 'right' ? EDGE_GAP + 'px' : 'auto'
+    root.style.left = edge === 'left' ? (EDGE_GAP - m.left) + 'px' : 'auto'
+    root.style.right = edge === 'right' ? (EDGE_GAP - m.right) + 'px' : 'auto'
     root.style.top = Math.round(yy) + 'px'
     root.style.bottom = 'auto'
     root.dataset.edge = edge
@@ -1960,10 +1986,11 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    */
   function applyCorner(corner) {
     const root = ui.root
-    root.style.left = corner === 'tl' || corner === 'bl' ? EDGE_GAP + 'px' : 'auto'
-    root.style.right = corner === 'tr' || corner === 'br' ? EDGE_GAP + 'px' : 'auto'
-    root.style.top = corner === 'tl' || corner === 'tr' ? EDGE_GAP + 'px' : 'auto'
-    root.style.bottom = corner === 'bl' || corner === 'br' ? EDGE_GAP + 'px' : 'auto'
+    const m = visualMargins()
+    root.style.left = corner === 'tl' || corner === 'bl' ? (EDGE_GAP - m.left) + 'px' : 'auto'
+    root.style.right = corner === 'tr' || corner === 'br' ? (EDGE_GAP - m.right) + 'px' : 'auto'
+    root.style.top = corner === 'tl' || corner === 'tr' ? (EDGE_GAP - m.top) + 'px' : 'auto'
+    root.style.bottom = corner === 'bl' || corner === 'br' ? (EDGE_GAP - m.bottom) + 'px' : 'auto'
     root.dataset.corner = corner
     root.dataset.edge = corner === 'tl' || corner === 'bl' ? 'left' : 'right'
     markStageRectDirty()
