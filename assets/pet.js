@@ -42,7 +42,7 @@
       sleepAfterMs: 180000,
       bubbleTtlMs: 0,
       maxWidthRatio: 0.5,
-      repeatChat: false, // 默认不复述：气泡不显示「你问了什么/她回了什么」的原文，其余台词、动作、表情照常
+      repeatChat: false, // 默认「安静模式」：气泡不显示对话原文（你问了什么/她回了什么），也不写过程流水账（工具路径、工具名、第 N 步、token 小结、分身提示）；她自己的台词、动作、表情、报错照常
     },
     BOOT.config || {},
   )
@@ -2257,7 +2257,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         busy: true,
         sticky: true,
       })
-      ui.bubble.note(stepDef.mood === 'reading' ? '看资料' : '思考中')
+      noteProcess(stepDef.mood === 'reading' ? '看资料' : '思考中')
     }
   }
 
@@ -3714,7 +3714,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       mouthBtn.textContent = CFG.talkMouth ? '说话口型：开' : '说话口型：关'
     })
     const chatBtn = $('button', 'dshp-btn', CFG.repeatChat ? '复述对话原文：开' : '复述对话原文：关')
-    chatBtn.title = '只管气泡要不要照抄「你问了什么 / 她回了什么」的原文；台词、动作、表情不受影响'
+    chatBtn.title = '关 = 安静模式：气泡不照抄「你问了什么 / 她回了什么」，也不写过程流水账（工具路径、工具名、第 N 步、token 小结、分身提示）；她自己的台词、动作、表情、报错照常'
     chatBtn.addEventListener('click', () => {
       CFG.repeatChat = !CFG.repeatChat
       chatBtn.textContent = CFG.repeatChat ? '复述对话原文：开' : '复述对话原文：关'
@@ -3831,13 +3831,21 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     agent.sleeping = false
   }
 
-  /* 「复述对话」开关只管这一件事：气泡里要不要出现「你问了什么原文 / 她回了什么原文」。
-   * 台词、思考提示、工具动态、出错文案、表情动作全部不受这个开关影响——见下面
-   * handleEvent 里只有 'user'（你的原话）和 'delta'/'assistant'（她的回复原文）
-   * 三处经过这道门，其余调用都还是直接 ui.bubble.show/note/act。 */
+  /* 「复述对话原文」开关（默认关）在本机就是**安静模式**，管两件事：
+   *   1. 对话原文——'user'（你的原话）与 'delta'/'assistant'（她的回复原文）；
+   *   2. 过程流水账——工具目标路径、工具名脚注、「正在思考 · 第 N 步」、
+   *      「本轮 N tokens」、结算里的耗时/token 小结、分身提示。见 noteProcess()。
+   * 她自己的台词（SAY./TOOL_LINE）、表情、动作、报错文案、余额 HUD 不受影响。 */
   function sayChat(text, opts) {
     if (!CFG.repeatChat) return
     ui.bubble.show(text, opts)
+  }
+
+  /* 过程脚注统一走这道门：安静模式下不写流水账。
+   * 只压 note（脚注/小结），不碰 ui.bubble.show 的台词正文。 */
+  function noteProcess(text) {
+    if (!CFG.repeatChat) return
+    ui.bubble.note(text)
   }
 
   function handleEvent(m) {
@@ -3876,7 +3884,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         if (!ui.bubble.visible) {
           ui.bubble.show(pickFresh(SAY.thinking, 'thinking'), { name: 'DS 鲸鱼娘', busy: true, sticky: true })
         } else {
-          ui.bubble.note('正在思考 · 第 ' + m.step + ' 步')
+          noteProcess('正在思考 · 第 ' + m.step + ' 步')
         }
         break
 
@@ -3905,7 +3913,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         if (m.usage) {
           const t = (m.usage.input || 0) + (m.usage.cache || 0) + (m.usage.output || 0)
           agent.tokens = (agent.tokens || 0) + t
-          ui.bubble.note('本轮 ' + t.toLocaleString() + ' tokens')
+          noteProcess('本轮 ' + t.toLocaleString() + ' tokens')
         }
         break
 
@@ -3937,13 +3945,14 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         // 脚注标出工具名——这样 Agent 里在跑什么，桌宠这边能同步看出来。
         const pool = TOOL_LINE[m.name] || (react.lean ? SAY.reading : SAY.working)
         const line = pickFresh(pool, 'tool-' + m.name)
-        const hint = toolHint(m.args)
+        // 第二行「具体在干什么」（目标路径 / 文件名）算过程流水账：安静模式下不写
+        const hint = CFG.repeatChat ? toolHint(m.args) : ''
         ui.bubble.show(line + (hint ? '\n' + hint : ''), {
           name: 'DS 鲸鱼娘',
           busy: true,
           sticky: true,
         })
-        ui.bubble.note(m.label || m.name)
+        noteProcess(m.label || m.name)
         break
       }
 
@@ -4015,11 +4024,11 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
           act({
             mood: 'happy',
             props: [pickFresh(['stickerCat', 'stickerRabbit', 'flower', 'heartbeat'], 'celebrate')],
-            line: keepText ? null : pickFresh(SAY.done, 'done') + (stat.length ? '\n' + stat.join(' · ') : ''),
+            line: keepText ? null : pickFresh(SAY.done, 'done') + (CFG.repeatChat && stat.length ? '\n' + stat.join(' · ') : ''),
             ms: 3000,
           })
           if (keepText) {
-            if (stat.length) ui.bubble.note(stat.join(' · '))
+            if (stat.length) noteProcess(stat.join(' · '))
             setTimeout(() => {
               if (agent.status !== 'idle') return
               ui.bubble.show(pickFresh(SAY.done, 'done'), { name: 'DS 鲸鱼娘', ttl: 4200 })
@@ -4041,7 +4050,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       }
 
       case 'subagent':
-        if (m.active && ui.bubble.visible) ui.bubble.note('分身也在干活…')
+        if (m.active && ui.bubble.visible) noteProcess('分身也在干活…')
         break
 
       case 'approval':
