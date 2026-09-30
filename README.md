@@ -5,7 +5,8 @@
 **DSH（DeepSeek Harness）Web 界面里的 Live2D 桌宠 —— 她真的在跟着 agent 干活。**
 **A Live2D desktop pet for the DeepSeek Harness Web UI — she really does follow what the agent is doing.**
 
-[![Release](https://img.shields.io/github/v/release/Andersen216/dsh-whale-girl-live2d?label=release&color=2f81f7)](https://github.com/Andersen216/dsh-whale-girl-live2d/releases)
+[![Release](https://img.shields.io/github/v/release/3Asterism/dsh-whale-girl-live2d-custom?label=release&color=2f81f7)](https://github.com/3Asterism/dsh-whale-girl-live2d-custom/releases)
+[![Based on](https://img.shields.io/badge/based%20on-Andersen216%2Fdsh--whale--girl--live2d-lightgrey)](https://github.com/Andersen216/dsh-whale-girl-live2d)
 [![Code: MIT](https://img.shields.io/badge/code-MIT-3fb950)](LICENSE)
 [![Artwork: CC BY-NC-SA 4.0](https://img.shields.io/badge/artwork-CC%20BY--NC--SA%204.0-d29922)](NOTICE.md)
 [![Non-commercial](https://img.shields.io/badge/use-non--commercial-e5534b)](NOTICE.md)
@@ -16,6 +17,40 @@
 点一下就能跟 agent 说话 · 右键就是钱包 · 表情 / 装饰 / 场景 / 动作 四页菜单 · 拖动换位置
 
 </div>
+
+---
+
+## 🔀 这是什么仓库 / About this repo
+
+**这是 [Andersen216/dsh-whale-girl-live2d](https://github.com/Andersen216/dsh-whale-girl-live2d) 的二次开发版本**，
+不是原创。代码 / 美术 / 运行时的许可证和署名要求跟原仓库完全一样（见下方「许可与署名」一节，
+一个字都没改）——这份 README 大部分内容直接沿用原仓库，只是在这里额外说明改了什么。
+
+**跟原仓库比，这个版本多了什么：**
+
+| 改动 | 状态 |
+| --- | --- |
+| 修复桌面版（Electron 官方壳）不显示鲸鱼娘的问题 | 已提交原仓库 [PR #2](https://github.com/Andersen216/dsh-whale-girl-live2d/pull/2)（等待合并） |
+| 性能优化：隐藏时停渲染、减少每帧内存分配、缓存布局读取 | 已提交原仓库 [PR #3](https://github.com/Andersen216/dsh-whale-girl-live2d/pull/3)（等待合并） |
+| 真正的四角贴边吸附 + 工具条自动侧移 + 面板越界兜底 | 已提交原仓库 [PR #4](https://github.com/Andersen216/dsh-whale-girl-live2d/pull/4)（等待合并） |
+| 「安静模式」：气泡默认不复述对话原文、不显示流水账/token 消耗 | **只在这个仓库**，原作者不一定认可这个交互取向，没有提交上游 |
+| 扩充台词池：取材中文互联网上 DeepSeek/鲸鱼娘相关的梗 | **只在这个仓库**，同上 |
+
+上面三条已经提给原作者的修复，如果哪天被合并进原仓库，这边会跟着同步、不会重复维护两份。
+后两条是交互风格上的个人取向调整，不一定符合原作者的设计意图，所以没有提 PR，只保留在这个仓库里。
+
+**装哪个仓库**：只想要原版体验 → 装 [Andersen216 的原仓库](https://github.com/Andersen216/dsh-whale-girl-live2d)
+（装法把下面命令里的 `3Asterism/dsh-whale-girl-live2d-custom` 换回 `Andersen216/dsh-whale-girl-live2d` 即可）；
+想要上面这些改动 → 直接照本 README 下面的安装命令装，已经是这个仓库的版本。
+
+> **English**: this repository is a customized fork of
+> [Andersen216/dsh-whale-girl-live2d](https://github.com/Andersen216/dsh-whale-girl-live2d), not an
+> original work. Licensing and attribution requirements are identical to the upstream repo (see
+> "License & credits" below, unchanged). Three fixes (desktop display, performance, corner-snap docking)
+> have been submitted upstream as PRs and will stop being maintained here separately once merged; two
+> interaction-style customizations (a "quiet mode" that suppresses chat-echo/process chatter by default,
+> and an expanded line pool drawing on Chinese-internet DeepSeek/whale-girl memes) are kept only in this
+> repo since they reflect a personal taste the original author may not share.
 
 ---
 
@@ -48,7 +83,7 @@
 
 ```bash
 # ① 装插件
-dsh plugin --profile web add github:Andersen216/dsh-whale-girl-live2d
+dsh plugin --profile web add github:3Asterism/dsh-whale-girl-live2d-custom
 
 # ② 重启 DSH（宿主插件只在启动时加载），然后刷新页面
 #    右下角出现她 = 网页版成功
@@ -101,7 +136,7 @@ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3080/dsh-pet/pet.js
 ### 方式 A：命令行装（推荐，一条命令）
 
 ```bash
-dsh plugin --profile web add github:Andersen216/dsh-whale-girl-live2d
+dsh plugin --profile web add github:3Asterism/dsh-whale-girl-live2d-custom
 ```
 
 - `--profile web` 是 DSH Web 界面的 profile 名。如果你用的是别的 profile 名，把 `web` 换成你自己的。
@@ -166,7 +201,7 @@ dsh plugin --profile web remove dsh-whale-girl-live2d
 **Option A — one command (recommended)**
 
 ```bash
-dsh plugin --profile web add github:Andersen216/dsh-whale-girl-live2d
+dsh plugin --profile web add github:3Asterism/dsh-whale-girl-live2d-custom
 ```
 
 `web` is the profile name used by the DSH Web UI; replace it if your profile is named differently.
@@ -524,15 +559,18 @@ dsh-whale-girl-live2d/
 
 ## 🔗 相关链接 / Links
 
-- **更新日志**：[`CHANGELOG.md`](CHANGELOG.md) · [Releases](https://github.com/Andersen216/dsh-whale-girl-live2d/releases)
+- **更新日志**：[`CHANGELOG.md`](CHANGELOG.md) · [Releases](https://github.com/3Asterism/dsh-whale-girl-live2d-custom/releases)
+- **原仓库**：[Andersen216/dsh-whale-girl-live2d](https://github.com/Andersen216/dsh-whale-girl-live2d) · [原仓库 Releases](https://github.com/Andersen216/dsh-whale-girl-live2d/releases)
 - **按键表对照**（52 条热键逐条对照）：[`docs/作者按键表-对照.md`](docs/作者按键表-对照.md)
-- **插件市场收录进度**：[awesome-dsh-plugin PR #5882](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/5882)
+- **插件市场收录进度**（原仓库）：[awesome-dsh-plugin PR #5882](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/5882)
 - **发布 / 装机问题排查**：[`docs/发布到插件市场.md`](docs/发布到插件市场.md)
 
 <div align="center">
 
-**如果她让你开心了一下，给个 ⭐ 吧 —— 也欢迎把问题提到 [Issues](https://github.com/Andersen216/dsh-whale-girl-live2d/issues)。**
+**这个仓库的改动有问题，提到 [本仓库 Issues](https://github.com/3Asterism/dsh-whale-girl-live2d-custom/issues)；
+模型 / 原版功能相关的问题，提到 [原仓库 Issues](https://github.com/Andersen216/dsh-whale-girl-live2d/issues)。**
 
-*Made with 🐋 by [Andersen216](https://github.com/Andersen216) · 非商业项目，模型素材版权归原作者所有*
+*基于 [Andersen216/dsh-whale-girl-live2d](https://github.com/Andersen216/dsh-whale-girl-live2d) 二次开发 ·
+非商业项目，模型素材版权归原作者所有（见上方「许可与署名」）*
 
 </div>
