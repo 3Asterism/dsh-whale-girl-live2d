@@ -1958,6 +1958,21 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       saveLayout({ x: null, y: null, edge: null, edgeY: null, corner })
       ui.root.dataset.corner = corner
       ui.root.dataset.edge = corner[1] === 'l' ? 'left' : 'right'
+      // 临时诊断：定位「工具条挪错边」的问题用，调好了会删掉。
+      setTimeout(() => {
+        try {
+          const dr = ui.dock.getBoundingClientRect()
+          const cs = getComputedStyle(ui.dock)
+          ui.bubble.show(
+            `[诊断] corner=${corner} data-corner=${ui.root.dataset.corner}\n` +
+              `m: L${m.left.toFixed(0)} R${m.right.toFixed(0)} T${m.top.toFixed(0)} B${m.bottom.toFixed(0)}\n` +
+              `root: x${Math.round(r.left)} w${Math.round(r.width)}\n` +
+              `dock css: left=${cs.left} right=${cs.right}\n` +
+              `dock rect: x${Math.round(dr.left)} w${Math.round(dr.width)}`,
+            { name: '诊断', sticky: true },
+          )
+        } catch (err) {}
+      }, 300)
       return true
     }
     if (!nearL && !nearR) return false // 底部/顶部单独都不吸附
