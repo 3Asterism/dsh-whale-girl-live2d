@@ -1865,6 +1865,14 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
   /** 贴边的留白（视觉上「贴住」但不顶死） */
   const EDGE_GAP = 10
+  /**
+   * 贴顶单独留更大的安全距离——DSH 桌面壳/主窗口顶边常有一排自己的控件
+   * （缩小/放大/关闭一类），那层东西的 z-index 不一定在这个插件的 DOM 里，
+   * 插件这边调不动谁盖谁。干脆贴顶的时候留够，从根上让画面不伸进那一条，
+   * 不用去赌层级谁压得过谁。这个数字没法测出精确值（不知道对方控件条多高），
+   * 按常见的自绘标题栏高度估的，明显不够或者太空可以再调。
+   */
+  const EDGE_GAP_TOP = 32
   /** 松手时离边多近就吸附 */
   const SNAP_DIST = 52
 
@@ -1952,7 +1960,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     if ((nearL || nearR) && (nearT || nearB)) {
       const corner = (nearT ? 't' : 'b') + (nearL ? 'l' : 'r')
       const left = nearL ? EDGE_GAP - m.left : vw - r.width - EDGE_GAP + m.right
-      const top = nearT ? EDGE_GAP - m.top : vh - r.height - EDGE_GAP + m.bottom
+      const top = nearT ? EDGE_GAP_TOP - m.top : vh - r.height - EDGE_GAP + m.bottom
       glideTo(left, top)
       // 记成「贴哪个角」，窗口大小变了也还贴着那个角（见 resize 里的 applyPosition）
       saveLayout({ x: null, y: null, edge: null, edgeY: null, corner })
@@ -2004,7 +2012,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const m = visualMargins()
     root.style.left = corner === 'tl' || corner === 'bl' ? (EDGE_GAP - m.left) + 'px' : 'auto'
     root.style.right = corner === 'tr' || corner === 'br' ? (EDGE_GAP - m.right) + 'px' : 'auto'
-    root.style.top = corner === 'tl' || corner === 'tr' ? (EDGE_GAP - m.top) + 'px' : 'auto'
+    root.style.top = corner === 'tl' || corner === 'tr' ? (EDGE_GAP_TOP - m.top) + 'px' : 'auto'
     root.style.bottom = corner === 'bl' || corner === 'br' ? (EDGE_GAP - m.bottom) + 'px' : 'auto'
     root.dataset.corner = corner
     root.dataset.edge = corner === 'tl' || corner === 'bl' ? 'left' : 'right'
