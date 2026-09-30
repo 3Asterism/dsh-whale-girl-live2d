@@ -3713,11 +3713,11 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       CFG.talkMouth = !CFG.talkMouth
       mouthBtn.textContent = CFG.talkMouth ? '说话口型：开' : '说话口型：关'
     })
-    const chatBtn = $('button', 'dshp-btn', CFG.repeatChat ? '复述对话原文：开' : '复述对话原文：关')
-    chatBtn.title = '关 = 安静模式：气泡不照抄「你问了什么 / 她回了什么」，也不写过程流水账（工具路径、工具名、第 N 步、token 小结、分身提示）；她自己的台词、动作、表情、报错照常'
+    const chatBtn = $('button', 'dshp-btn', CFG.repeatChat ? '安静模式：关' : '安静模式：开')
+    chatBtn.title = '安静模式：开 = 气泡不照抄「你问了什么 / 她回了什么」，也不写过程流水账（工具路径、工具名、第 N 步、token 小结、分身提示）；她自己的台词、动作、表情、报错照常。（就是原来的「复述对话原文」开关，默认开）'
     chatBtn.addEventListener('click', () => {
       CFG.repeatChat = !CFG.repeatChat
-      chatBtn.textContent = CFG.repeatChat ? '复述对话原文：开' : '复述对话原文：关'
+      chatBtn.textContent = CFG.repeatChat ? '安静模式：关' : '安静模式：开'
       saveLayout({ repeatChat: CFG.repeatChat })
     })
     row1.append(eyeBtn, mouthBtn, chatBtn)
