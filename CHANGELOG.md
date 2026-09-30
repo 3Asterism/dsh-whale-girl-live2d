@@ -1,5 +1,29 @@
 # 更新日志 / Changelog
 
+## 0.4.3 — 2026-09-30
+
+> **English summary**: the macOS shell no longer hard-codes the DSH port. It discovers the host at
+> launch (listening ports owned by `DeepSeek` / `node`, probed with the desk token) so it works with
+> both the **official DSH desktop app** (Electron, port chosen by the host — 19387 here) and a
+> manually started `dsh web`. The plugin itself needed no changes. Verified in the log:
+> `找到宿主（票有效）: http://127.0.0.1:19387`.
+
+### 适配官方桌面版（只改 macOS App，插件零改动）
+
+DSH 官方桌面版（`DeepSeek Harness.app` 0.2.0-rc.2，Electron）会自己起一个本地 web 服务，
+端口由宿主决定（本机实测 `127.0.0.1:19387`，而手动的 `dsh web` 是 3080）。
+外壳原来把 3080 写死了，所以连不上官方桌面版。
+
+现在改成**启动时发现宿主**：
+
+1. `lsof` 列出本机监听端口，挑出 `DeepSeek` / `dsh` / `node` 这些进程占用的端口
+2. 逐个探 `HEAD/GET /dsh-pet/pet.js`（带通行证）：`200` 就用它；只有 `401` 时也先进去（票可能过期）
+3. 兜底候选：19387（官方桌面版实测端口）、3080、8080、3000
+4. ↗ 按钮和诊断页也跟着发现出来的宿主走
+
+实测：日志输出 `找到宿主（票有效）: http://127.0.0.1:19387`，
+页面 `DSHPet=yes` —— 官方桌面版下正常。插件侧不需要任何适配（`desktop` profile 里已装好）。
+
 ## 0.4.2 — 2026-09-27
 
 > **English summary**: macOS only — the drag "air wall" is gone. AppKit constrains windows to the

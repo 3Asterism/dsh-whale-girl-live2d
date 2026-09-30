@@ -15,7 +15,11 @@
 import Cocoa
 import WebKit
 
-let PET_URL = "http://127.0.0.1:3080/dsh-pet/standalone"
+/// 宿主地址在启动时「发现」出来，不再写死 ——
+/// 官方桌面版（Electron App，端口由它自己挑，实测 19387）和手动起的 `dsh web`（3080）
+/// 都能连上。插件侧不用做任何改动。
+var deskBase: String = "http://127.0.0.1:19387"
+var petURL: String { deskBase + "/dsh-pet/standalone" }
 // 窗口必须比「她 + 四周面板」大：说话框 370 宽、设置面板 393×471，
 // 窗口太小时面板会被窗口本身裁掉（主人看到的「只剩一个角」就是这个原因）。
 // 多出来的区域是透明的、而且点击穿透 —— 不影响你操作别的窗口。
@@ -372,13 +376,84 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     // MARK: - 加载与位置
 
+    /// 候选宿主：① 正在监听的「像 DSH 的」进程（官方桌面版 / dsh web）② 常见端口兜底
+    func candidateBases() -> [String] {
+        var ports: [Int] = []
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+        p.arguments = ["-nP", "-iTCP", "-sTCP:LISTEN"]
+        let pipe = Pipe()
+        p.standardOutput = pipe
+        p.standardError = FileHandle.nullDevice
+        if (try? p.run()) != nil {
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            p.waitUntilExit()
+            for line in String(decoding: data, as: UTF8.self).split(separator: "\n") {
+                let l = String(line)
+                let cmd = l.split(separator: " ").first.map(String.init) ?? ""
+                // 官方桌面版进程名是 "DeepSeek"，`dsh web` 是 node
+                guard cmd.contains("DeepSeek") || cmd.contains("dsh") || cmd.contains("node") else { continue }
+                if let r = l.range(of: #":(\d{4,5})\s*$"#, options: .regularExpression),
+                   let port = Int(l[r].dropFirst().trimmingCharacters(in: .whitespaces)) {
+                    ports.append(port)
+                }
+            }
+        }
+        ports += [19387, 3080, 8080, 3000]   // 兜底：官方桌面版实测端口 + 常用 web 端口
+        var seen = Set<Int>()
+        return ports.filter { seen.insert($0).inserted }.map { "http://127.0.0.1:\($0)" }
+    }
+
+    /// 探一下某个宿主：200 = 就是它且票有效；401 = 插件在但票不对；其它 = 不是它
+    func probeHost(_ base: String, token: String) -> Int {
+        guard let u = URL(string: base + "/dsh-pet/pet.js") else { return -1 }
+        var req = URLRequest(url: u)
+        req.timeoutInterval = 1.5
+        req.setValue("dsh_pet_desk=\(token)", forHTTPHeaderField: "Cookie")
+        let sem = DispatchSemaphore(value: 0)
+        var code = -1
+        URLSession.shared.dataTask(with: req) { _, resp, _ in
+            if let h = resp as? HTTPURLResponse { code = h.statusCode }
+            sem.signal()
+        }.resume()
+        _ = sem.wait(timeout: .now() + 2.5)
+        return code
+    }
+
     func load() {
-        guard let u = URL(string: PET_URL) else { return }
         guard let token = deskToken() else {
             log("还没拿到本地通行证（~/.dsh/dsh-live2d-pet-desktop.json）—— 插件可能还是旧版，5 秒后重试")
             retry(after: 5)
             return
         }
+        DispatchQueue.global().async { [weak self] in
+            guard let self else { return }
+            var fallback: String?
+            for base in self.candidateBases() {
+                let code = self.probeHost(base, token: token)
+                if code == 200 {
+                    self.log("找到宿主（票有效）: \(base)")
+                    DispatchQueue.main.async { self.start(base: base, token: token) }
+                    return
+                }
+                if code == 401, fallback == nil { fallback = base }
+            }
+            DispatchQueue.main.async {
+                if let fb = fallback {
+                    self.log("找到宿主（票可能过期，先进去看）: \(fb)")
+                    self.start(base: fb, token: token)
+                } else {
+                    self.showHint("没找到正在运行的 DSH —— 官方桌面版和 `dsh web` 都试过了。请先打开其中一个。")
+                    self.retry(after: 5)
+                }
+            }
+        }
+    }
+
+    /// 真正开始加载某个宿主
+    func start(base: String, token: String) {
+        deskBase = base
+        guard let u = URL(string: petURL) else { return }
         // 把通行证写成 cookie：之后页面里的 pet.js、SSE、控制接口都会自动带上它，
         // 不用改前端任何一行。
         let props: [HTTPCookiePropertyKey: Any] = [
@@ -390,7 +465,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             return
         }
         web.configuration.websiteDataStore.httpCookieStore.setCookie(cookie) { [weak self] in
-            self?.log("通行证已就位，加载 \(PET_URL)")
+            self?.log("通行证已就位，加载 \(petURL)")
             self?.web.load(URLRequest(url: u))
         }
     }
@@ -457,8 +532,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             expandFromBall()
         case "open-dsh":
             // 前端那个 ↗ 符号：用默认浏览器打开 DeepSeek Harness 界面
-            if let u = URL(string: "http://127.0.0.1:3080/") { NSWorkspace.shared.open(u) }
-            log("已用浏览器打开 DSH 界面")
+            if let u = URL(string: deskBase + "/") { NSWorkspace.shared.open(u) }
+            log("已用浏览器打开 DSH 界面（\(deskBase)）")
         case "quit":
             quitNow()
         default:
@@ -567,7 +642,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         log("加载失败：\(e.localizedDescription) —— 5 秒后重试")
         failCount += 1
         if failCount >= 3 {
-            showHint("没连上 DSH（\(PET_URL)）。<br>请确认：① 插件已装好 ② DSH 正在运行。<br>连上之后她会自动出现。")
+            showHint("没连上 DSH（\(petURL)）。<br>请确认：① 插件已装好 ② DSH 正在运行。<br>连上之后她会自动出现。")
         }
         retry(after: 5)
     }
@@ -813,7 +888,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     }
 
     @objc func openDiag() {
-        if let u = URL(string: "http://127.0.0.1:3080/dsh-pet/diag") { NSWorkspace.shared.open(u) }
+        if let u = URL(string: deskBase + "/dsh-pet/diag") { NSWorkspace.shared.open(u) }
     }
 
     @objc func openHome() {
