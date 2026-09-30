@@ -613,6 +613,13 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 .dshp-bubble:after{content:"";position:absolute;left:50%;bottom:-6px;margin-left:-6px;
   width:12px;height:12px;background:var(--dshp-bg);border-right:1px solid var(--dshp-line);
   border-bottom:1px solid var(--dshp-line);transform:rotate(45deg);border-radius:0 0 3px 0}
+/* 翻到下面：贴顶角落时头顶没地方放气泡，整个翻到脚下去，别硬挤出屏幕。
+   见 placePanel() 里的翻转判断；尖角跟着一起翻，还是指向她。 */
+.dshp-bubble.dshp-flip{bottom:auto;top:100%;margin-bottom:0;margin-top:calc(10px * var(--dshp-s));
+  transform:translate(calc(-50% + var(--dshp-shift,0px)),calc(-6px + var(--dshp-shift-y,0px))) scale(.96)}
+.dshp-bubble.dshp-flip.dshp-on{transform:translate(calc(-50% + var(--dshp-shift,0px)),var(--dshp-shift-y,0px)) scale(1)}
+.dshp-bubble.dshp-flip:after{bottom:auto;top:-6px;border-right:none;border-bottom:none;
+  border-left:1px solid var(--dshp-line);border-top:1px solid var(--dshp-line);border-radius:3px 0 0 0}
 .dshp-head{display:flex;align-items:center;gap:calc(6px * var(--dshp-s));
   margin-bottom:calc(3px * var(--dshp-s));
   font-size:calc(10.5px * var(--dshp-s));letter-spacing:.04em;color:var(--dshp-accent);font-weight:600}
@@ -674,6 +681,10 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 .dshp-root.dshp-sizing .dshp-panel{transition:opacity .16s ease}
 .dshp-panel.dshp-on{opacity:1;visibility:visible;
   transform:translateX(calc(-50% + var(--dshp-shift,0px))) translateY(var(--dshp-shift-y,0px))}
+/* 翻到下面：跟气泡同一个道理，贴顶角落时头顶没地方展开设置面板 */
+.dshp-panel.dshp-flip{bottom:auto;top:calc(100% + 10px * var(--dshp-ps));
+  transform:translateX(calc(-50% + var(--dshp-shift,0px))) translateY(calc(-4px + var(--dshp-shift-y,0px)))}
+.dshp-panel.dshp-flip.dshp-on{transform:translateX(calc(-50% + var(--dshp-shift,0px))) translateY(var(--dshp-shift-y,0px))}
 .dshp-panel textarea{width:100%;box-sizing:border-box;resize:none;
   height:calc(64px * var(--dshp-ps));font:inherit;
   color:inherit;background:transparent;border:1px solid var(--dshp-line);
@@ -702,7 +713,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    主人要求：右键不再是设置菜单，而是这个框；信息要醒目、要盖在最上层、
    又要能自己收起来（不然挡住对话）。所以它是独立一层，z-index 比菜单还高。 */
 .dshp-hud{position:absolute;left:50%;bottom:calc(100% + 10px * var(--dshp-ps));
-  transform:translateX(calc(-50% + var(--dshp-shift,0px))) translateY(8px);
+  transform:translateX(calc(-50% + var(--dshp-shift,0px))) translateY(calc(8px + var(--dshp-shift-y,0px)));
   width:min(calc(292px * var(--dshp-ps)),86vw);pointer-events:auto;z-index:9;
   background:var(--dshp-bg);color:var(--dshp-fg);
   border:1px solid var(--dshp-line);border-radius:calc(var(--dshp-radius) * var(--dshp-ps));
@@ -712,7 +723,11 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   transition:opacity .18s ease,transform .18s cubic-bezier(.2,.9,.3,1);
   font-size:calc(12px * var(--dshp-ps))}
 .dshp-hud.dshp-on{opacity:1;visibility:visible;
-  transform:translateX(calc(-50% + var(--dshp-shift,0px))) translateY(0)}
+  transform:translateX(calc(-50% + var(--dshp-shift,0px))) translateY(var(--dshp-shift-y,0px))}
+/* 翻到下面：跟设置面板/气泡同一个道理，钱包卡片贴顶角落时头顶也没地方展开 */
+.dshp-hud.dshp-flip{bottom:auto;top:calc(100% + 10px * var(--dshp-ps));
+  transform:translateX(calc(-50% + var(--dshp-shift,0px))) translateY(calc(-8px + var(--dshp-shift-y,0px)))}
+.dshp-hud.dshp-flip.dshp-on{transform:translateX(calc(-50% + var(--dshp-shift,0px))) translateY(var(--dshp-shift-y,0px))}
 /* 刚弹出来那一下给一圈呼吸光，提醒「看这里」——冒烟效果用 box-shadow，不动 transform */
 .dshp-hud.dshp-flash{animation:dshp-hud-flash 1.15s ease-out 2}
 @keyframes dshp-hud-flash{
@@ -844,6 +859,16 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     burst: null,
   }
   let mood = 'neutral'
+
+  /**
+   * applyRig() 每帧（20-30Hz，永远在跑）都要用到的临时容器，挪到外面按帧复用。
+   * 原来是 `new Map()`/`new Set()` 写在函数体里，哪怕待机没有任何表情变化
+   * 也要照样分配、当帧就丢——纯粹的 GC 压力。空闲时这三个容器基本是空的，
+   * `.clear()` 比重新分配便宜得多。
+   */
+  const rigTargets = new Map()
+  const rigDelta = new Map()
+  const rigClaimed = new Set()
 
   /** 情绪名 → 表达式名（不在 EXPR 里的会被过滤掉） */
   function moodFace(name) {
@@ -1037,7 +1062,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const dt = Math.min(64, now - (applyRig._last || now)) / 1000
     applyRig._last = now
 
-    const targets = new Map()
+    const targets = rigTargets
+    targets.clear()
     if (rig.face) targets.set(rig.face, 1)
     for (const name of rig.props) targets.set(name, 1)
 
@@ -1060,8 +1086,10 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     // （比如墨镜会写 ParamEyeLOpen），叠上去就会打架。
     // 所以这里做一个裁决：每个参数在同一时刻只允许**一个**表达式写，
     // 优先级 脸 > 道具（按加入顺序）。
-    const delta = new Map()
-    const claimed = new Set()
+    const delta = rigDelta
+    const claimed = rigClaimed
+    delta.clear()
+    claimed.clear()
     let skipped = 0
     const add = (id, v) => delta.set(id, (delta.get(id) || 0) + v)
     const winners = []
@@ -1643,13 +1671,29 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     return r.left + r.width / 2
   }
 
+  /**
+   * 气泡/面板/HUD 全都必须整个待在 DSH app 自己的窗口里——不管是网页版的
+   * 浏览器视口，还是桌面壳那个固定尺寸（560×900）的透明覆盖窗口，`window.innerWidth/
+   * innerHeight` 在两种情况下都正好等于「这个 app 能画画的地方」，所以只要
+   * 面板的四条边都夹在 `[pad, vw/vh - pad]` 里，就一定没有超出 app 本身。
+   *
+   * 光「横向夹+纵向推」不够：面板默认长在她头顶上方，桌面壳窗口特地留高
+   * 就是为了给这个上方留白。可她现在能贴死在顶部角落了（EDGE_GAP 几乎到顶），
+   * 头顶就没有留白可言——硬推的话面板会被压扁/顶穿窗口顶边。真正靠谱的做法
+   * 是「翻转」：上面放不下、下面比上面宽裕，就整个翻到脚下去（CSS 见
+   * `.dshp-flip`），而不是在放不下的地方硬挤。
+   */
   function placePanel(panel) {
     if (!panel) return
     const vw = window.innerWidth
+    const vh = window.innerHeight
     const pad = 10
     panel.style.setProperty('--dshp-shift', '0px')
+    panel.style.setProperty('--dshp-shift-y', '0px')
+    panel.classList.remove('dshp-flip')
     if (!panel.classList.contains('dshp-on')) return
     const w = panel.getBoundingClientRect().width || 0
+    const h = panel.getBoundingClientRect().height || 0
     if (!w) return
     const r = ui.root.getBoundingClientRect()
     const anchor = headScreenX() // 对准头顶，而不是整个场景的中心
@@ -1660,9 +1704,19 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     if (left < pad) shift += pad - left
     else if (left + w > vw - pad) shift -= left + w - (vw - pad)
     panel.style.setProperty('--dshp-shift', Math.round(shift) + 'px')
-    // 纵向兜底：桌宠被拖到屏幕顶端时，面板别伸到屏幕外面去
-    const top = panel.getBoundingClientRect().top
-    panel.style.setProperty('--dshp-shift-y', top < pad ? Math.round(pad - top) + 'px' : '0px')
+
+    // 纵向：默认贴头顶上方；上面的空间不够放、下面比上面宽裕，就整个翻下去
+    const spaceAbove = r.top
+    const spaceBelow = vh - r.bottom
+    const flip = spaceAbove < h + pad && spaceBelow > spaceAbove
+    panel.classList.toggle('dshp-flip', flip)
+    if (flip) {
+      const bottom = panel.getBoundingClientRect().bottom
+      panel.style.setProperty('--dshp-shift-y', bottom > vh - pad ? Math.round(vh - pad - bottom) + 'px' : '0px')
+    } else {
+      const top = panel.getBoundingClientRect().top
+      panel.style.setProperty('--dshp-shift-y', top < pad ? Math.round(pad - top) + 'px' : '0px')
+    }
   }
 
   function clampPanels() {
@@ -1734,6 +1788,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       ui.root.style.setProperty('--dshp-ps', clamp(h / UI_BASE_HEIGHT, 0.85, 1.15).toFixed(3))
     }
     mask.dirty = true
+    markStageRectDirty()
     lastView = {
       w,
       h,
@@ -1819,9 +1874,11 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     el.style.top = top + 'px'
     el.style.right = 'auto'
     el.style.bottom = 'auto'
+    markStageRectDirty()
     setTimeout(() => {
       el.style.transition = ''
       clampPanels()
+      markStageRectDirty() // 滑动过程中缓存会暂时过期，动画落定后再刷新一次保证准
     }, 260)
   }
 
@@ -1893,6 +1950,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     root.style.bottom = 'auto'
     root.dataset.edge = edge
     root.dataset.corner = ''
+    markStageRectDirty()
   }
 
   /**
@@ -1908,6 +1966,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     root.style.bottom = corner === 'bl' || corner === 'br' ? EDGE_GAP + 'px' : 'auto'
     root.dataset.corner = corner
     root.dataset.edge = corner === 'tl' || corner === 'bl' ? 'left' : 'right'
+    markStageRectDirty()
   }
 
   /**
@@ -1938,6 +1997,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       root.style.bottom = 'auto'
       root.dataset.edge = ''
       root.dataset.corner = ''
+      markStageRectDirty()
       return
     }
     // 老存档 / 首次启动：按角落算一次，然后就地存成 edge 形式（下次就是新的了）
@@ -2164,6 +2224,25 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     gaze.detachUntil = performance.now() + (ms || 1500)
   }
 
+  /**
+   * `ui.stage` 的屏幕矩形缓存。gazeTick 永远在跑（40ms 一次，待机也不停），
+   * 之前每次都现读 `getBoundingClientRect()`——待机的时候她根本没动，
+   * 这个矩形几十秒都不带变的，没必要每 40ms 强制触发一次布局读取。
+   * 只在真的会动/会变的地方（拖动、贴边、resize、改大小）标脏，其余时候直接用缓存。
+   */
+  let stageRect = null
+  let stageRectDirty = true
+  function markStageRectDirty() {
+    stageRectDirty = true
+  }
+  function getStageRect() {
+    if (stageRectDirty || !stageRect) {
+      stageRect = ui.stage.getBoundingClientRect()
+      stageRectDirty = false
+    }
+    return stageRect
+  }
+
   function gazeTick() {
     if (!model || !ui) return
     const now = performance.now()
@@ -2177,7 +2256,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
     const g = gazeCfg()
     if (!detached && CFG.lookAtCursor && gaze.pointer.seen) {
-      const r = ui.stage.getBoundingClientRect()
+      const r = getStageRect()
       if (r.width) {
         const dx = gaze.pointer.x - (r.left + r.width / 2)
         const dy = gaze.pointer.y - (r.top + r.height / 2)
@@ -2291,6 +2370,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       py = clampY(py + sy, h, window.innerHeight)
       el.style.left = px + 'px'
       el.style.top = py + 'px'
+      markStageRectDirty()
       if (Math.abs(sx) > 0.4 || Math.abs(sy) > 0.4) requestAnimationFrame(step)
       else saveLayout({ x: Math.round(px), y: Math.round(py), edge: null, edgeY: null, corner: null })
     }
@@ -2560,7 +2640,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
             root.style.top = ny + 'px'
             root.style.right = 'auto'
             root.style.bottom = 'auto'
-
+            markStageRectDirty()
           }
         }
         // 只记录坐标，真正的跟随在 gazeTick 里限速执行——
@@ -2649,6 +2729,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         root.style.left = clamp(parseFloat(root.style.left) || 0, -40, window.innerWidth - 60) + 'px'
         root.style.top = clamp(parseFloat(root.style.top) || 0, -20, window.innerHeight - 60) + 'px'
       }
+      markStageRectDirty() // 视口本身变了，缓存的矩形肯定不准了——兜底再标一次
       clampPanels()
     })
 
@@ -3397,6 +3478,16 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     if (hidden) ui.bubble.hide()
     saveLayout({ hidden: !!hidden })
     if (shell.on) shell.post(hidden ? 'hidden' : 'shown')
+    // 隐藏是主人主动点的「现在不用显示她」——这种情况停渲染循环零风险
+    // （反正看不见，不存在「切回来感觉卡住」的问题，那个顾虑只针对「被遮挡但
+    // 没被隐藏」的场景，这里不碰）。桌面壳为了不让她显得卡顿，关掉了
+    // Electron 的后台降频（backgroundThrottling:false），所以 document.hidden
+    // 几乎不会在桌面壳里变 true——真正能捕捉「用户已经不需要她画面」的
+    // 时机，只有这个显式的隐藏开关。
+    if (app) {
+      if (hidden) app.ticker.stop()
+      else if (!document.hidden) app.ticker.start()
+    }
   }
 
   /**
