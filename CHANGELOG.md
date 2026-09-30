@@ -1,5 +1,29 @@
 # 更新日志 / Changelog
 
+## 0.4.4 — 2026-09-30
+
+> **English summary**: mouse-move stutter on macOS is fixed. Two causes, both in the shell:
+> (1) `ignoresMouseEvents` was re-assigned every 90 ms tick, making the window server redo hit
+> testing constantly; (2) every tick did a JS round-trip into the page (`elementFromPoint` + per-pixel
+> alpha sampling) even though she occupies ~10 % of the window. Now the shell caches her bounds and
+> the panel rects once per second and answers the common case locally — measured:
+> `探针统计：本地判定 575 次 / 进网页 0 次` in one minute.
+
+### 修：macOS 鼠标一动就卡
+
+两个原因，都在外壳里（前端一行没改）：
+
+1. **`ignoresMouseEvents` 每 90ms 重复赋值** —— 即使值没变也赋，窗口服务器于是不停重算命中测试。
+   现在只在真正变化时赋值。
+2. **每 90ms 都往网页里问一次「鼠标在不在她身上」** —— 一次 IPC + `elementFromPoint` +
+   逐像素 alpha 采样；而她的可见范围只占 560×900 窗口的约 10%，**九成询问是浪费**。
+   现在：壳子每秒缓存一次她的范围和面板矩形，之后 90% 的探针**本地纯计算**得出结果。
+
+实测（重启后运行一分钟）：`探针统计：本地判定 575 次 / 进网页 0 次`；
+壳子主进程 3.2%、WebContent 4.8% —— 鼠标移动不再触发任何 JS 往返。
+
+（还加了「探针统计」日志，每 60 秒一行，以后再卡可以直接看数字定位。）
+
 ## 0.4.3 — 2026-09-30
 
 > **English summary**: the macOS shell no longer hard-codes the DSH port. It discovers the host at

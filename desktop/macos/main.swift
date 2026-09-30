@@ -71,6 +71,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     var ballAt = NSPoint.zero
     var ballMoved: CGFloat = 0
     var hiddenWatch: Timer?
+    var health2: Timer?
     var launchedAt = Date()
     var failCount = 0
     var lastLogText = ""
@@ -346,6 +347,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     }catch(e){return 'none'}})()
     """
 
+    /// 她的可见范围 + 各面板矩形（每 ~1 秒刷新一次就够：她动得很慢）
+    /// 有了它，90% 的探针可以「本地算完」，不用每次进网页 —— 这是丝滑的关键。
+    var lastIgnore: Bool?
+    var geo: (stage: CGRect, panels: [CGRect])?
+    var geoAt = Date.distantPast
+    var statLocal = 0
+    var statJS = 0
+
+    func refreshGeo(_ done: (() -> Void)? = nil) {
+        let js = """
+        (function(){try{
+          var r=document.querySelector('canvas');
+          var st=r?r.getBoundingClientRect():{left:0,top:0,width:0,height:0};
+          var ps=[];
+          document.querySelectorAll('.dshp-panel,.dshp-hud,.dshp-bubble,.dshp-composer,.dshp-dock').forEach(function(e){
+            var b=e.getBoundingClientRect(); if(b.width>4&&b.height>4) ps.push([b.left,b.top,b.width,b.height]);
+          });
+          return JSON.stringify({s:[st.left,st.top,st.width,st.height],p:ps});
+        }catch(e){return null}})()
+        """
+        web.evaluateJavaScript(js) { [weak self] res, _ in
+            guard let self, let str = res as? String, let d = str.data(using: .utf8),
+                  let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
+                  let a = o["s"] as? [Double], a.count == 4 else { return }
+            let stage = CGRect(x: a[0], y: a[1], width: a[2], height: a[3])
+            var panels: [CGRect] = []
+            for raw in (o["p"] as? [[Double]] ?? []) where raw.count == 4 {
+                panels.append(CGRect(x: raw[0], y: raw[1], width: raw[2], height: raw[3]))
+            }
+            let stageBox = stage.insetBy(dx: -6, dy: -6)      // 留一点余量，别在边缘抖
+            self.geo = (stageBox, panels)
+            self.geoAt = Date()
+            done?()
+        }
+    }
+
     func updateHit() {
         if !win.isVisible { return }        // 收起成小球时主窗口不在屏幕上，没必要探
         // ⚠️ 拖动期间必须冻结探针：探针每 90ms 会把 ignoresMouseEvents 设成
@@ -354,6 +391,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         if shellDrag || panelGesture { return }
         let m = NSEvent.mouseLocation
         let f = win.frame
+        // ——— 本地快速判定（不碰网页）———
+        // 她只占窗口的一小块；鼠标不在她的范围、也不在任何面板里时，直接判「穿透」，
+        // 省掉一次 IPC + elementFromPoint + 逐像素采样。这一步把 90% 的探针变成纯计算。
+        if let g = geo, Date().timeIntervalSince(geoAt) < 6 {
+            let p = CGPoint(x: m.x - f.minX, y: f.maxY - m.y)   // 转成页面坐标（原点在左上）
+            if !g.stage.contains(p) && !g.panels.contains(where: { $0.contains(p) }) {
+                statLocal += 1
+                if inside { setInside(false) }
+                return
+            }
+        } else if Date().timeIntervalSince(geoAt) > 1 {
+            refreshGeo()        // 几何过期就顺手刷新（异步，不阻塞）
+        }
         if !f.contains(m) { setInside(false); return }
         let x = m.x - f.minX
         let y = f.height - (m.y - f.minY)     // 屏幕坐标 → 网页坐标（左上原点）
@@ -371,7 +421,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     func setInside(_ v: Bool) {
         if v == inside { return }
         inside = v
-        win.ignoresMouseEvents = !v
+        // ⚠️ 只在「真的变化」时才赋值。原来每个 tick（90ms）都赋一次，
+        // 会让 WindowServer 反复重算窗口命中测试 —— 鼠标一动就卡的主因之一。
+        let want = !v
+        if lastIgnore == want { return }
+        lastIgnore = want
+        win.ignoresMouseEvents = want
     }
 
     // MARK: - 加载与位置
@@ -589,7 +644,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     /// 桌宠是透明的，出问题时「看不见」和「没启动」长得一样，只能靠这个区分。
     func startHealthChecks() {
         health?.invalidate()
-        health = Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in
+        health = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            self?.log("探针统计：本地判定 \(self?.statLocal ?? 0) 次 / 进网页 \(self?.statJS ?? 0) 次（越少越省）")
+            self?.statLocal = 0
+            self?.statJS = 0
+        }
+        health2 = Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in
             guard let self, self.win.isVisible else { return }
             let js = """
             (function(){try{
