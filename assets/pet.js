@@ -633,6 +633,15 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   width:max-content;white-space:nowrap;
   pointer-events:auto;opacity:0;transition:opacity .22s ease}
 .dshp-root.dshp-hover .dshp-dock,.dshp-root.dshp-open .dshp-dock{opacity:1}
+/* 贴进真正的角落时，正下方没有余量留给工具条了（不然角落就白贴了），
+   所以挪到侧边，竖排、贴着她身子。哪一侧空出来给按钮，看贴的是哪个角：
+   贴左边的角（没有左边空间）就把按钮甩到右边，贴右边的角反过来。 */
+.dshp-root[data-corner] .dshp-dock{left:auto;right:auto;bottom:auto;top:50%;
+  transform:translateY(-50%);flex-direction:column;width:auto;white-space:normal}
+.dshp-root[data-corner="tl"] .dshp-dock,.dshp-root[data-corner="bl"] .dshp-dock{
+  left:calc(100% + 6px * var(--dshp-ds))}
+.dshp-root[data-corner="tr"] .dshp-dock,.dshp-root[data-corner="br"] .dshp-dock{
+  right:calc(100% + 6px * var(--dshp-ds))}
 .dshp-btn{border:1px solid var(--dshp-line);background:var(--dshp-bg);color:var(--dshp-fg);
   border-radius:calc(11px * var(--dshp-ds));flex:0 0 auto;white-space:nowrap;
   padding:calc(5px * var(--dshp-ds)) calc(11px * var(--dshp-ds));
@@ -1825,10 +1834,14 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    * 松手时的贴边吸附。
    *
    * 主人改的规矩（原话）：「只吸附右边、不吸附底，我可以随意调整高低，
-   * 但只吸附右边或左边的墙壁」——所以这里**只看左右**：
-   *   · 靠左墙 / 靠右墙 → 吸过去，竖直位置保持你松手的那个高度
-   *   · 离两边都远 → 就停在原地（竖直方向永远不吸）
-   * 竖直方向只做一件事：别让底下的三个按钮被屏幕切掉（软性夹一下，不是吸附）。
+   * 但只吸附右边或左边的墙壁」——所以竖直方向本身不设单独的吸附线。
+   * 后来又加了一条：**四个真角落**要能整个贴死（横纵一起锁住）——这样
+   * 工具条才有理由挪到侧边（见 CSS `[data-corner]`），角落才不会因为
+   * 「下面还要留给按钮的空间」而贴不到底。
+   *
+   *   · 横纵都够近墙角 → 真角落：两个方向一起吸，工具条挪侧边
+   *   · 只有左右够近 → 老规矩：吸那一侧墙，竖直位置保持你松手的高度
+   *   · 都不够近 → 停在原地，交给惯性滑动
    */
   function snapOnRelease() {
     const vw = window.innerWidth
@@ -1836,7 +1849,21 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const r = ui.root.getBoundingClientRect()
     const nearL = r.left < SNAP_DIST
     const nearR = vw - r.right < SNAP_DIST
-    if (!nearL && !nearR) return false // 底部不再吸附
+    const nearT = r.top < SNAP_DIST
+    const nearB = vh - r.bottom < SNAP_DIST
+
+    if ((nearL || nearR) && (nearT || nearB)) {
+      const corner = (nearT ? 't' : 'b') + (nearL ? 'l' : 'r')
+      const left = nearL ? EDGE_GAP : vw - r.width - EDGE_GAP
+      const top = nearT ? EDGE_GAP : vh - r.height - EDGE_GAP
+      glideTo(left, top)
+      // 记成「贴哪个角」，窗口大小变了也还贴着那个角（见 resize 里的 applyPosition）
+      saveLayout({ x: null, y: null, edge: null, edgeY: null, corner })
+      ui.root.dataset.corner = corner
+      ui.root.dataset.edge = corner[1] === 'l' ? 'left' : 'right'
+      return true
+    }
+    if (!nearL && !nearR) return false // 底部/顶部单独都不吸附
 
     const edge = nearR ? 'right' : 'left'
     const y = clampY(r.top, r.height, vh)
@@ -1845,6 +1872,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     // 记成「贴哪一边 + 竖直位置」，窗口大小变了也还贴着那一边、高低不动
     saveLayout({ x: null, y: null, corner: null, edge, edgeY: Math.round(y) })
     ui.root.dataset.edge = edge
+    ui.root.dataset.corner = ''
     return true
   }
 
@@ -1864,16 +1892,37 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     root.style.top = Math.round(yy) + 'px'
     root.style.bottom = 'auto'
     root.dataset.edge = edge
+    root.dataset.corner = ''
   }
 
   /**
-   * 摆放位置。三种存档：
-   *   · edge + edgeY —— 贴左/右墙，竖直位置自由（**现在吸附后存的就是这种**）
+   * 贴进真正的角落：横纵两个方向都锁死在墙边（不像 applyEdge 只锁一个方向），
+   * 所以**不走 clampY**——角落模式下方不用给工具条留白，它已经挪到侧边了
+   * （CSS `[data-corner]` 里处理），能贴多死就贴多死。
+   */
+  function applyCorner(corner) {
+    const root = ui.root
+    root.style.left = corner === 'tl' || corner === 'bl' ? EDGE_GAP + 'px' : 'auto'
+    root.style.right = corner === 'tr' || corner === 'br' ? EDGE_GAP + 'px' : 'auto'
+    root.style.top = corner === 'tl' || corner === 'tr' ? EDGE_GAP + 'px' : 'auto'
+    root.style.bottom = corner === 'bl' || corner === 'br' ? EDGE_GAP + 'px' : 'auto'
+    root.dataset.corner = corner
+    root.dataset.edge = corner === 'tl' || corner === 'bl' ? 'left' : 'right'
+  }
+
+  /**
+   * 摆放位置。四种存档：
+   *   · corner       —— 贴死在四角之一，工具条挪侧边（**手动拖到角落吸附后存的就是这种**）
+   *   · edge + edgeY —— 贴左/右墙，竖直位置自由（吸附到墙但没到角落存的是这种）
    *   · x + y        —— 完全自由摆放
-   *   · corner       —— 老存档（左下/右下那种），读到时自动迁移成 edge 形式，竖直位置按角落换算
+   *   · 都没有        —— 首次启动，按 CFG.corner 算一次默认位置，就地存成 edge 形式
    */
   function applyPosition(layout) {
     const root = ui.root
+    if (layout.corner) {
+      applyCorner(layout.corner)
+      return
+    }
     const vh = window.innerHeight
     const h = root.getBoundingClientRect().height || 0
     const dock = dockClearance()
@@ -1888,6 +1937,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       root.style.right = 'auto'
       root.style.bottom = 'auto'
       root.dataset.edge = ''
+      root.dataset.corner = ''
       return
     }
     // 老存档 / 首次启动：按角落算一次，然后就地存成 edge 形式（下次就是新的了）
@@ -2533,6 +2583,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         dragging = true
         dragMoved = false
         delete root.dataset.edge // 一拖就离开墙，别再显示「贴着左边」
+        delete root.dataset.corner // 同上：一拖就离开角落，工具条先挪回下面，吸没吸得上松手再说
         const r = root.getBoundingClientRect()
         start = { mx: e.clientX, my: e.clientY, left: r.left, top: r.top }
       },
@@ -2590,8 +2641,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     window.addEventListener('resize', () => {
       fitModel()
       const layout = readLayout()
-      // 贴着左/右墙的：重新贴住那一侧（竖直位置不变，只夹进可见范围）
-      if (layout.edge === 'left' || layout.edge === 'right') {
+      // 贴着角落 / 贴着左右墙的：重新贴住原来那个位置（角落两个方向都重新锁一遍，
+      // 贴墙的只锁那一侧，竖直位置不变，只夹进可见范围）
+      if (layout.corner || layout.edge === 'left' || layout.edge === 'right') {
         applyPosition(layout)
       } else if (root.style.left && root.style.left !== 'auto') {
         root.style.left = clamp(parseFloat(root.style.left) || 0, -40, window.innerWidth - 60) + 'px'
